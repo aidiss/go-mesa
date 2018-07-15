@@ -1,87 +1,83 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
 	"math/rand"
-	"sync"
+	"os"
+	"sort"
 
 	"github.com/icrowley/fake"
 )
 
 func main() {
-	agentCount := 5
-	stepCount := 5
+	agentCount := 100
+	stepCount := 100
 
 	var agents []Agent
-	model := Model{"Model name", agents, agentCount}
+	model := Model{"Model name", agentCount}
 
-	model.createAgents()
-
-	// Step model
-	for i := 0; i < stepCount; i++ {
-		model.step()
+	// Create agents
+	for i := 0; i < model.agentCount; i++ {
+		agent := Agent{i, fake.FirstName(), 5}
+		fmt.Println(agent)
+		agents = append(agents, agent)
 	}
+
+	// Print out all created agents
+	for _, agent := range agents {
+		fmt.Println(agent)
+	}
+
+	// Run model
+	for i := 0; i < stepCount; i++ {
+		// Run each agent
+		for i := range agents {
+			go agents[i].step(agents)
+			fmt.Println(agents[i])
+		}
+	}
+
+	sort.Slice(agents, func(i, j int) bool {
+		return agents[i].Wealth < agents[j].Wealth
+	})
 
 	// Print out a report
-	for _, agent := range model.agents {
-		println(agent.name, agent.wealth)
+	for _, agent := range agents {
+		println(agent.Name, agent.Wealth)
 	}
+
+	a, err := json.Marshal(agents)
+	if err != nil {
+		log.Fatal("Cannot encode to JSON ", err)
+	}
+	fmt.Fprintf(os.Stdout, "%s", a)
+
+	err = ioutil.WriteFile("output1.json", a, 0644)
 }
 
 // Model contains agents, their context and scheduler
 type Model struct {
 	name       string
-	agents     []Agent
 	agentCount int
-}
-
-func (model *Model) step() {
-	var wg sync.WaitGroup
-	for _, agent := range model.agents {
-		new_agent := agent
-		wg.Add(1)
-		new_agent.step(&wg)
-	}
-	wg.Wait()
-}
-
-func (model *Model) createAgents() {
-	for i := 0; i < model.agentCount; i++ {
-		agent := Agent{i, model, fake.FirstName(), 5}
-		model.agents = append(model.agents, agent)
-		// fmt.Println(agent)
-	}
 }
 
 /// Agent has to move
 type Agent struct {
-	unique_id int
-	model     *Model
-	name      string
-	wealth    int
+	UniqueID int    `uniqueId`
+	Name     string `name`
+	Wealth   int    `wealth`
 }
 
-func (agent *Agent) decreaseWealth(n int) {
-	agent.wealth -= n
-}
-func (agent *Agent) increaseWealth(n int) {
-
-	agent.wealth += n
-}
-
-func (agent *Agent) step(wg *sync.WaitGroup) {
-	// fmt.Println("Stepping", agent)
-	// agentCount := len(agent.model.agents)
-	// println(agentCount)
-	if agent.wealth == 0 {
+func (agent *Agent) step(agents []Agent) {
+	if agent.Wealth <= 0 {
+		println("Done")
 		return
 	}
-	agentCount := len(agent.model.agents)
+	agentCount := len(agents)
 	randomIndex := rand.Intn(agentCount)
-	otherAgent := agent.model.agents[randomIndex]
-	otherAgent.wealth += 1
-	agent.wealth -= 5
-	otherAgent.increaseWealth(1)
-	agent.decreaseWealth(1)
-
-	wg.Done()
+	agents[randomIndex].Wealth += 1
+	agent.Wealth -= 1
 }
